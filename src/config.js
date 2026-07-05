@@ -6,10 +6,7 @@ class Config {
     constructor() {
         this.storedConfigPath = path.join(app.getPath('userData'), 'stored-config.json');
         
-        // Жёсткие дефолты (не требуют .env)
         this._setDefaults();
-        
-        // Загружаем сохранённые настройки
         this._loadStored();
     }
 
