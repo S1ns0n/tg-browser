@@ -11,10 +11,8 @@ class IPCHandlers {
     }
 
     _register() {
-        // Запуск туннеля с полным конфигом
         ipcMain.handle('start-tunnel', async (event, userConfig) => {
             try {
-                // Обновляем конфиг
                 this.config.appUrl = userConfig.appUrl || this.config.appUrl;
                 this.config.vps.host = userConfig.vpsHost || this.config.vps.host;
                 this.config.vps.port = userConfig.vpsPort || this.config.vps.port;
@@ -22,16 +20,11 @@ class IPCHandlers {
                 this.config.proxy.host = userConfig.proxyHost || this.config.proxy.host;
                 this.config.proxy.port = userConfig.proxyPort || this.config.proxy.port;
                 
-                // Сохраняем все данные
                 this.config.saveFullConfig(userConfig);
-                
-                // Обновляем туннель с новыми настройками
                 this.sshTunnel.updateConfig(this.config);
                 
-                // Запускаем туннель
                 await this.sshTunnel.start(userConfig.vpsPassword);
                 
-                // Закрываем окно входа и открываем основное
                 this.loginWindow.close();
                 this.mainWindow.create();
                 
@@ -41,7 +34,6 @@ class IPCHandlers {
             }
         });
 
-        // Получение конфига для UI
         ipcMain.handle('get-config', () => {
             return {
                 appUrl: this.config.appUrl,
@@ -54,9 +46,19 @@ class IPCHandlers {
             };
         });
 
-        // Получение статуса туннеля
         ipcMain.handle('get-tunnel-status', () => {
             return this.sshTunnel.getStatus();
+        });
+
+        ipcMain.handle('open-settings', async () => {
+            // Останавливаем туннель
+            await this.sshTunnel.stop();
+            
+            // Закрываем основное окно
+            this.mainWindow.close();
+            
+            // Открываем окно входа (настроек)
+            this.loginWindow.create();
         });
     }
 }

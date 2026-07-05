@@ -1,9 +1,10 @@
 const { app } = require('electron');
-const Config = require('./config');
-const SSHTunnel = require('./tunnel/ssh-tunnel');
-const MainWindow = require('./windows/main-window');
-const LoginWindow = require('./windows/login-window');
-const IPCHandlers = require('./ipc/ipc-handlers');
+const path = require('path');
+const Config = require(path.join(__dirname, 'config.js'));
+const SSHTunnel = require(path.join(__dirname, 'tunnel', 'ssh-tunnel.js'));
+const MainWindow = require(path.join(__dirname, 'windows', 'main-window.js'));
+const LoginWindow = require(path.join(__dirname, 'windows', 'login-window.js'));
+const IPCHandlers = require(path.join(__dirname, 'ipc', 'ipc-handlers.js'));
 
 class Application {
     constructor() {
@@ -14,17 +15,11 @@ class Application {
     }
 
     async start() {
-        // Инициализация конфига
         this.config = new Config();
-        
-        // Создаём туннель
         this.sshTunnel = new SSHTunnel(this.config);
-        
-        // Создаём окна
         this.mainWindow = new MainWindow(this.config);
         this.loginWindow = new LoginWindow();
         
-        // Регистрируем IPC обработчики
         new IPCHandlers(
             this.config, 
             this.sshTunnel, 
@@ -32,9 +27,7 @@ class Application {
             this.loginWindow
         );
 
-        // Запускаемся
         if (this.config.vps.password) {
-            // Пароль сохранён - пробуем авто-подключение
             try {
                 await this.sshTunnel.start(this.config.vps.password);
                 this.mainWindow.create();
@@ -43,7 +36,6 @@ class Application {
                 this.loginWindow.create();
             }
         } else {
-            // Первый запуск - показываем окно входа
             this.loginWindow.create();
         }
     }
@@ -53,7 +45,6 @@ class Application {
     }
 }
 
-// Запуск приложения
 const appInstance = new Application();
 
 app.whenReady().then(() => {
