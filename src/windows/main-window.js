@@ -36,6 +36,7 @@ class MainWindow {
 
         // Перехватываем открытие новых окон
         this.window.webContents.setWindowOpenHandler(({ url }) => {
+<<<<<<< HEAD
             // Проверяем, это настройки Telegram или нет
             if (url.includes('web.telegram.org') && !url.includes('/k/') && !url.includes('/a/')) {
                 // Это настройки или другой раздел Telegram — открываем в текущем окне
@@ -45,6 +46,26 @@ class MainWindow {
             
             // Для всех остальных ссылок разрешаем новое окно
             return { action: 'allow' };
+=======
+            // Загружаем URL в текущем окне вместо открытия нового
+            this.window.loadURL(url);
+            
+            // Запрещаем создание нового окна
+            return { action: 'deny' };
+        });
+
+        // Перехватываем навигацию внутри WebView
+        this.window.webContents.on('will-navigate', (event, url) => {
+            // Разрешаем только URL внутри домена приложения
+            const appDomain = new URL(this.config.appUrl).hostname;
+            const targetDomain = new URL(url).hostname;
+            
+            if (targetDomain !== appDomain && !targetDomain.endsWith('.' + appDomain.split('.').slice(-2).join('.'))) {
+                // Для внешних ссылок открываем в том же окне
+                event.preventDefault();
+                this.window.loadURL(url);
+            }
+>>>>>>> 8940d237d6ff1516d82b0cb4a5d9e562ff7187f2
         });
 
         this.window.webContents.on('did-finish-load', () => {
