@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a2e;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            -webkit-app-region: drag;
+        }
+        
+        .container {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 12px;
+            width: 380px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        h2 {
+            margin-bottom: 8px;
+            color: #0088cc;
+            font-size: 20px;
+        }
+        
+        .subtitle {
+            color: #8899aa;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            font-size: 12px;
+            color: #8899aa;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            background: #0f3460;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            -webkit-app-region: no-drag;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            border-color: #0088cc;
+        }
+        
+        .row {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .row .form-group {
+            flex: 1;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            -webkit-app-region: no-drag;
+            transition: background 0.3s;
+        }
+        
+        button:hover { background: #006699; }
+        
+        button:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        
+        .error {
+            color: #ff4444;
+            margin-top: 10px;
+            font-size: 12px;
+            display: none;
+            text-align: center;
+        }
+        
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #333;
+            border-top: 2px solid #0088cc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+            display: none;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .advanced-toggle {
+            color: #8899aa;
+            font-size: 12px;
+            text-align: center;
+            cursor: pointer;
+            margin-top: 15px;
+            -webkit-app-region: no-drag;
+        }
+        
+        .advanced-toggle:hover {
+            color: #0088cc;
+        }
+        
+        .advanced-settings {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #0f3460;
+        }
+        
+        .advanced-settings.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🔐 Подключение</h2>
+        <p class="subtitle">Настройка туннеля и приложения</p>
+        
+        <div class="form-group">
+            <label>URL приложения</label>
+            <input type="text" id="appUrl" value="https://web.telegram.org/k/" placeholder="https://web.telegram.org/k/">
+        </div>
+        
+        <div class="form-group">
+            <label>Хост VPS</label>
+            <input type="text" id="vpsHost" placeholder="72.56.81.141">
+        </div>
+        
+        <div class="row">
+            <div class="form-group">
+                <label>Порт SSH</label>
+                <input type="number" id="vpsPort" value="22" placeholder="22">
+            </div>
+            <div class="form-group">
+                <label>Пользователь</label>
+                <input type="text" id="vpsUsername" value="root" placeholder="root">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" id="vpsPassword" placeholder="Пароль">
+        </div>
+        
+        <div class="advanced-toggle" onclick="toggleAdvanced()">
+            ⚙️ Дополнительные настройки ▼
+        </div>
+        
+        <div class="advanced-settings" id="advancedSettings">
+            <div class="row">
+                <div class="form-group">
+                    <label>Прокси хост</label>
+                    <input type="text" id="proxyHost" value="127.0.0.1" placeholder="127.0.0.1">
+                </div>
+                <div class="form-group">
+                    <label>Прокси порт</label>
+                    <input type="number" id="proxyPort" value="1080" placeholder="1080">
+                </div>
+            </div>
+        </div>
+        
+        <button id="connectBtn" onclick="connect()">Подключиться</button>
+        <div class="loader" id="loader"></div>
+        <div class="error" id="error"></div>
+    </div>
+
+    <script>
+        // Загружаем сохранённый конфиг при старте
+        window.electronAPI.getConfig().then(config => {
+            if (config.appUrl) document.getElementById('appUrl').value = config.appUrl;
+            if (config.vpsHost) document.getElementById('vpsHost').value = config.vpsHost;
+            if (config.vpsPort) document.getElementById('vpsPort').value = config.vpsPort;
+            if (config.vpsUsername) document.getElementById('vpsUsername').value = config.vpsUsername;
+            if (config.proxyHost) document.getElementById('proxyHost').value = config.proxyHost;
+            if (config.proxyPort) document.getElementById('proxyPort').value = config.proxyPort;
+            
+            // Если есть сохранённый пароль - фокус на кнопку
+            if (config.hasPassword) {
+                document.getElementById('connectBtn').focus();
+            } else {
+                document.getElementById('vpsPassword').focus();
+            }
+        });
+
+        function toggleAdvanced() {
+            const settings = document.getElementById('advancedSettings');
+            const toggle = document.querySelector('.advanced-toggle');
+            
+            if (settings.classList.contains('visible')) {
+                settings.classList.remove('visible');
+                toggle.innerHTML = '⚙️ Дополнительные настройки ▼';
+            } else {
+                settings.classList.add('visible');
+                toggle.innerHTML = '⚙️ Дополнительные настройки ▲';
+            }
+        }
+
+        async function connect() {
+            const config = {
+                appUrl: document.getElementById('appUrl').value,
+                vpsHost: document.getElementById('vpsHost').value,
+                vpsPort: parseInt(document.getElementById('vpsPort').value),
+                vpsUsername: document.getElementById('vpsUsername').value,
+                vpsPassword: document.getElementById('vpsPassword').value,
+                proxyHost: document.getElementById('proxyHost').value,
+                proxyPort: parseInt(document.getElementById('proxyPort').value)
+            };
+            
+            const btn = document.getElementById('connectBtn');
+            const loader = document.getElementById('loader');
+            const error = document.getElementById('error');
+            
+            // Базовая валидация
+            if (!config.vpsHost || !config.vpsPassword) {
+                error.textContent = 'Заполните хост и пароль';
+                error.style.display = 'block';
+                return;
+            }
+            
+            btn.disabled = true;
+            loader.style.display = 'block';
+            error.style.display = 'none';
+            
+            const result = await window.electronAPI.startTunnel(config);
+            
+            if (!result.success) {
+                error.textContent = result.error;
+                error.style.display = 'block';
+                btn.disabled = false;
+                loader.style.display = 'none';
+            }
+            // Если успех - окно закроется автоматически
+        }
+
+        // Enter для отправки
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') connect();
+        });
+    </script>
+</body>
+</html>
