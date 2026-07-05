@@ -7,32 +7,56 @@ class SSHTunnel {
         this.client = null;
         this.server = null;
         this.isConnected = false;
-        this.streams = new Map();
+        this.reconnectTimer = null;
+        this.password = null;
     }
 
     async start(password) {
+        this.password = password;
+        
         if (this.isConnected) {
             console.log('Туннель уже запущен');
             return true;
         }
 
+        return this._connect(password);
+    }
+
+    async _connect(password) {
         return new Promise((resolve, reject) => {
+            // Закрываем старое соединение если есть
+            if (this.client) {
+                try { this.client.end(); } catch (e) {}
+            }
+
             this.client = new Client();
 
             this.client.on('ready', () => {
                 console.log('SSH подключен успешно');
+                this.isConnected = true;
                 this._startProxy(resolve, reject);
             });
 
             this.client.on('error', (err) => {
                 console.error('SSH ошибка:', err.message);
                 this.isConnected = false;
+                
+                // Если была ошибка после успешного подключения - пробуем переподключиться
+                if (this.reconnectTimer === null) {
+                    this._scheduleReconnect();
+                }
+                
                 reject(new Error(`Ошибка SSH: ${err.message}`));
             });
 
             this.client.on('close', () => {
                 console.log('SSH соединение закрыто');
                 this.isConnected = false;
+                
+                // Переподключаемся если соединение было активным
+                if (this.password && this.reconnectTimer === null) {
+                    this._scheduleReconnect();
+                }
             });
 
             this.client.connect({
@@ -41,13 +65,42 @@ class SSHTunnel {
                 username: this.config.vps.username,
                 password: password,
                 readyTimeout: 10000,
-                keepaliveInterval: 5000
+                keepaliveInterval: 30000,    // Пингуем каждые 30 секунд
+                keepaliveCountMax: 3,        // Максимум 3 пропущенных пинга
+                debug: false
             });
         });
     }
 
+    _scheduleReconnect() {
+        if (this.reconnectTimer) return;
+        
+        console.log('Планируем переподключение через 5 секунд...');
+        this.reconnectTimer = setTimeout(async () => {
+            this.reconnectTimer = null;
+            console.log('Пытаемся переподключиться...');
+            
+            try {
+                await this._connect(this.password);
+                console.log('Переподключение успешно');
+            } catch (err) {
+                console.error('Ошибка переподключения:', err.message);
+                // Пробуем снова через 10 секунд
+                setTimeout(() => {
+                    this.reconnectTimer = null;
+                    this._scheduleReconnect();
+                }, 10000);
+            }
+        }, 5000);
+    }
+
     _startProxy(resolve, reject) {
         const self = this;
+        
+        // Закрываем старый сервер если есть
+        if (this.server) {
+            try { this.server.close(); } catch (e) {}
+        }
         
         this.server = net.createServer((clientSocket) => {
             let buffer = Buffer.alloc(0);
@@ -58,7 +111,6 @@ class SSHTunnel {
                 
                 if (state === 'handshake' && buffer.length >= 3) {
                     const version = buffer[0];
-                    const nmethods = buffer[1];
                     
                     if (version !== 5) {
                         clientSocket.end();
@@ -99,81 +151,86 @@ class SSHTunnel {
                         return;
                     }
                     
-                    console.log(`Туннель: ${host}:${port}`);
+                    // Проверяем что клиент ещё подключен
+                    if (!self.client || !self.isConnected) {
+                        const response = Buffer.alloc(headerLength);
+                        buffer.copy(response, 0, 0, headerLength);
+                        response[1] = 1; // Ошибка
+                        clientSocket.write(response);
+                        clientSocket.end();
+                        return;
+                    }
                     
-                    self.client.forwardOut(
-                        '127.0.0.1',
-                        0,
-                        host,
-                        port,
-                        (err, stream) => {
-                            if (err) {
-                                console.error('Ошибка форвардинга:', err);
+                    try {
+                        self.client.forwardOut(
+                            '127.0.0.1',
+                            0,
+                            host,
+                            port,
+                            (err, stream) => {
+                                if (err) {
+                                    console.error('Ошибка форвардинга:', err.message);
+                                    const response = Buffer.alloc(headerLength);
+                                    buffer.copy(response, 0, 0, headerLength);
+                                    response[1] = 1;
+                                    clientSocket.write(response);
+                                    clientSocket.end();
+                                    return;
+                                }
+                                
                                 const response = Buffer.alloc(headerLength);
                                 buffer.copy(response, 0, 0, headerLength);
-                                response[1] = 1;
+                                response[1] = 0;
                                 clientSocket.write(response);
-                                clientSocket.end();
-                                return;
+                                
+                                clientSocket.on('data', (chunk) => {
+                                    try { stream.write(chunk); } catch (e) {}
+                                });
+                                
+                                stream.on('data', (chunk) => {
+                                    try { clientSocket.write(chunk); } catch (e) {}
+                                });
+                                
+                                clientSocket.on('error', () => {
+                                    try { stream.end(); } catch (e) {}
+                                });
+                                
+                                stream.on('error', () => {
+                                    try { clientSocket.end(); } catch (e) {}
+                                });
+                                
+                                clientSocket.on('close', () => {
+                                    try { stream.end(); } catch (e) {}
+                                });
+                                
+                                stream.on('close', () => {
+                                    try { clientSocket.end(); } catch (e) {}
+                                });
                             }
-                            
-                            const response = Buffer.alloc(headerLength);
-                            buffer.copy(response, 0, 0, headerLength);
-                            response[1] = 0;
-                            clientSocket.write(response);
-                            
-                            // Двусторонний обмен данными
-                            clientSocket.on('data', (chunk) => {
-                                try {
-                                    stream.write(chunk);
-                                } catch (e) {
-                                    console.error('Ошибка записи в stream:', e);
-                                }
-                            });
-                            
-                            stream.on('data', (chunk) => {
-                                try {
-                                    clientSocket.write(chunk);
-                                } catch (e) {
-                                    console.error('Ошибка записи в socket:', e);
-                                }
-                            });
-                            
-                            clientSocket.on('error', (e) => {
-                                console.error('Socket error:', e.message);
-                                stream.end();
-                            });
-                            
-                            stream.on('error', (e) => {
-                                console.error('Stream error:', e.message);
-                                clientSocket.end();
-                            });
-                            
-                            clientSocket.on('close', () => {
-                                stream.end();
-                            });
-                            
-                            stream.on('close', () => {
-                                clientSocket.end();
-                            });
-                        }
-                    );
+                        );
+                    } catch (err) {
+                        console.error('Ошибка forwardOut:', err.message);
+                        const response = Buffer.alloc(headerLength);
+                        buffer.copy(response, 0, 0, headerLength);
+                        response[1] = 1;
+                        clientSocket.write(response);
+                        clientSocket.end();
+                    }
                     
                     state = 'connected';
-                }
-                else if (state === 'connected') {
-                    // Данные уже передаются через stream
                 }
             });
             
             clientSocket.on('error', (err) => {
-                console.error('Ошибка клиента:', err);
+                console.error('Ошибка клиента:', err.message);
             });
         });
 
         this.server.on('error', (err) => {
-            console.error('Ошибка SOCKS5 сервера:', err);
-            reject(err);
+            console.error('Ошибка SOCKS5 сервера:', err.message);
+            if (!this.isConnected) {
+                reject(err);
+            }
         });
 
         this.server.listen(this.config.proxy.port, this.config.proxy.host, () => {
@@ -184,6 +241,12 @@ class SSHTunnel {
     }
 
     stop() {
+        // Очищаем таймер переподключения
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        
         return new Promise((resolve) => {
             if (this.server) {
                 this.server.close(() => {
@@ -192,12 +255,18 @@ class SSHTunnel {
             }
             
             if (this.client) {
+                this.client.removeAllListeners(); // Убираем обработчики чтобы не переподключался
                 this.client.on('close', () => {
                     console.log('SSH клиент закрыт');
                     this.isConnected = false;
+                    this.password = null;
                     resolve();
                 });
-                this.client.end();
+                try {
+                    this.client.end();
+                } catch (e) {
+                    resolve();
+                }
             } else {
                 resolve();
             }
