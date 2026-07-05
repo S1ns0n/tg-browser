@@ -50,15 +50,15 @@ class IPCHandlers {
             return this.sshTunnel.getStatus();
         });
 
-        ipcMain.handle('open-settings', async () => {
-            // Останавливаем туннель
-            await this.sshTunnel.stop();
-            
-            // Закрываем основное окно
-            this.mainWindow.close();
-            
-            // Открываем окно входа (настроек)
-            this.loginWindow.create();
+        // Меняем handle на on для open-settings
+        ipcMain.on('open-settings', async () => {
+            try {
+                await this.sshTunnel.stop();
+                this.mainWindow.close();
+                this.loginWindow.create();
+            } catch (error) {
+                console.error('Ошибка при открытии настроек:', error);
+            }
         });
     }
 }

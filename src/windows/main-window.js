@@ -1,4 +1,4 @@
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
 class MainWindow {
@@ -17,7 +17,8 @@ class MainWindow {
             webPreferences: {
                 preload: path.join(__dirname, '..', 'preload.js'),
                 nodeIntegration: false,
-                contextIsolation: true
+                contextIsolation: true,
+                sandbox: false
             }
         });
 
@@ -27,23 +28,17 @@ class MainWindow {
             proxyRules: proxyRules,
             proxyBypassRules: ''
         }).then(() => {
-            console.log('Прокси настроен:', proxyRules);
-            this.window.loadURL(this.config.appUrl);
+            // Загружаем старую версию Telegram Web (без React модалок)
+            this.window.loadURL('https://web.telegram.org/a/');
         }).catch((err) => {
-            console.error('Ошибка настройки прокси:', err);
-            this.window.loadURL(this.config.appUrl);
+            this.window.loadURL('https://web.telegram.org/a/');
         });
 
-        // Перехватываем открытие новых окон
+        this.window.webContents.session.setCertificateVerifyProc((request, callback) => {
+            callback(0);
+        });
+
         this.window.webContents.setWindowOpenHandler(({ url }) => {
-            // Проверяем, это настройки Telegram или нет
-            if (url.includes('web.telegram.org') && !url.includes('/k/') && !url.includes('/a/')) {
-                // Это настройки или другой раздел Telegram — открываем в текущем окне
-                this.window.loadURL(url);
-                return { action: 'deny' };
-            }
-            
-            // Для всех остальных ссылок разрешаем новое окно
             return { action: 'allow' };
         });
 
@@ -91,14 +86,16 @@ class MainWindow {
         `;
 
         const js = `
-            const btn = document.createElement('button');
-            btn.id = 'app-settings-btn';
-            btn.innerHTML = '⚙';
-            btn.title = 'Настройки подключения';
-            btn.addEventListener('click', () => {
-                window.electronAPI.openSettings();
-            });
-            document.body.appendChild(btn);
+            if (!document.getElementById('app-settings-btn')) {
+                const btn = document.createElement('button');
+                btn.id = 'app-settings-btn';
+                btn.innerHTML = '⚙';
+                btn.title = 'Настройки подключения';
+                btn.addEventListener('click', () => {
+                    window.electronAPI.openSettings();
+                });
+                document.body.appendChild(btn);
+            }
         `;
 
         this.window.webContents.insertCSS(css);

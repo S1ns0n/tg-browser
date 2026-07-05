@@ -5,5 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getTunnelStatus: () => ipcRenderer.invoke('get-tunnel-status'),
     saveConfig: (config) => ipcRenderer.invoke('save-config', config),
     getConfig: () => ipcRenderer.invoke('get-config'),
-    openSettings: () => ipcRenderer.invoke('open-settings')
+    openSettings: () => {
+        // Вызываем без передачи объекта
+        ipcRenderer.send('open-settings');
+    }
 });
