@@ -34,6 +34,19 @@ class MainWindow {
             this.window.loadURL(this.config.appUrl);
         });
 
+        // Перехватываем открытие новых окон
+        this.window.webContents.setWindowOpenHandler(({ url }) => {
+            // Проверяем, это настройки Telegram или нет
+            if (url.includes('web.telegram.org') && !url.includes('/k/') && !url.includes('/a/')) {
+                // Это настройки или другой раздел Telegram — открываем в текущем окне
+                this.window.loadURL(url);
+                return { action: 'deny' };
+            }
+            
+            // Для всех остальных ссылок разрешаем новое окно
+            return { action: 'allow' };
+        });
+
         this.window.webContents.on('did-finish-load', () => {
             this._injectSettingsButton();
         });
