@@ -34,6 +34,28 @@ class MainWindow {
             this.window.loadURL(this.config.appUrl);
         });
 
+        // Перехватываем открытие новых окон
+        this.window.webContents.setWindowOpenHandler(({ url }) => {
+            // Загружаем URL в текущем окне вместо открытия нового
+            this.window.loadURL(url);
+            
+            // Запрещаем создание нового окна
+            return { action: 'deny' };
+        });
+
+        // Перехватываем навигацию внутри WebView
+        this.window.webContents.on('will-navigate', (event, url) => {
+            // Разрешаем только URL внутри домена приложения
+            const appDomain = new URL(this.config.appUrl).hostname;
+            const targetDomain = new URL(url).hostname;
+            
+            if (targetDomain !== appDomain && !targetDomain.endsWith('.' + appDomain.split('.').slice(-2).join('.'))) {
+                // Для внешних ссылок открываем в том же окне
+                event.preventDefault();
+                this.window.loadURL(url);
+            }
+        });
+
         this.window.webContents.on('did-finish-load', () => {
             this._injectSettingsButton();
         });
