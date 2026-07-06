@@ -11,7 +11,7 @@ class Config {
     }
 
     _setDefaults() {
-        this.appUrl = 'https://web.telegram.org/k/';
+        this.appUrl = 'https://web.telegram.org/';
         this.vps = {
             host: '',
             port: 22,

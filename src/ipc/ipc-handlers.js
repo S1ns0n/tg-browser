@@ -50,14 +50,26 @@ class IPCHandlers {
             return this.sshTunnel.getStatus();
         });
 
-        // Меняем handle на on для open-settings
+        ipcMain.handle('go-home', () => {
+            if (this.mainWindow.window) {
+                this.mainWindow.window.loadURL(this.config.appUrl);
+            }
+        });
+
+        // on вместо handle
         ipcMain.on('open-settings', async () => {
             try {
                 await this.sshTunnel.stop();
                 this.mainWindow.close();
                 this.loginWindow.create();
             } catch (error) {
-                console.error('Ошибка при открытии настроек:', error);
+                console.error('Ошибка открытия настроек:', error);
+            }
+        });
+
+        ipcMain.on('download-update', () => {
+            if (this.updater) {
+                this.updater.downloadUpdate();
             }
         });
     }

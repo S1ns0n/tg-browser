@@ -1,4 +1,10 @@
-const { app } = require('electron');
+const { app, globalShortcut, BrowserWindow } = require('electron');
+
+process.on('unhandledRejection', (reason) => {
+    if (reason.message === 'An object could not be cloned.') return;
+    console.error('Unhandled Rejection:', reason);
+});
+
 const path = require('path');
 const Config = require(path.join(__dirname, 'config.js'));
 const SSHTunnel = require(path.join(__dirname, 'tunnel', 'ssh-tunnel.js'));
@@ -27,6 +33,34 @@ class Application {
             this.loginWindow
         );
 
+        globalShortcut.register('Ctrl+Shift+R', async () => {
+            console.log('Горячая клавиша: возврат к настройкам');
+            await this.sshTunnel.stop();
+            this.mainWindow.close();
+            this.loginWindow.create();
+        });
+
+        const { Menu } = require('electron');
+        const menu = Menu.buildFromTemplate([
+            {
+                label: 'Файл',
+                submenu: [
+                    {
+                        label: 'Настройки подключения',
+                        accelerator: 'Ctrl+Shift+S',
+                        click: async () => {
+                            await this.sshTunnel.stop();
+                            this.mainWindow.close();
+                            this.loginWindow.create();
+                        }
+                    },
+                    { type: 'separator' },
+                    { role: 'quit' }
+                ]
+            }
+        ]);
+        Menu.setApplicationMenu(menu);
+
         if (this.config.vps.password) {
             try {
                 await this.sshTunnel.start(this.config.vps.password);
@@ -41,6 +75,7 @@ class Application {
     }
 
     async stop() {
+        globalShortcut.unregisterAll();
         await this.sshTunnel.stop();
     }
 }

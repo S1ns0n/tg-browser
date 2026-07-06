@@ -6,7 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveConfig: (config) => ipcRenderer.invoke('save-config', config),
     getConfig: () => ipcRenderer.invoke('get-config'),
     openSettings: () => {
-        // Вызываем без передачи объекта
         ipcRenderer.send('open-settings');
-    }
+    },
+    goHome: () => ipcRenderer.invoke('go-home'),
+    downloadUpdate: () => ipcRenderer.send('download-update')
 });

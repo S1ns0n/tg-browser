@@ -1,6 +1,6 @@
 {
   "name": "tg-browser",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Secure Telegram browser with VPS tunnel",
   "main": "src/main.js",
   "author": "Nikita",
