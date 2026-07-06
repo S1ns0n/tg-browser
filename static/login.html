@@ -267,7 +267,10 @@
 
         // Enter для отправки
         document.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') connect();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                connect();
+            }
         });
     </script>
 </body>
